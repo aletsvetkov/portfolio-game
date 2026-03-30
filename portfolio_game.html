@@ -198,35 +198,30 @@ let frameCount = 0;
 let currentZone = null;
 
 // ─── INPUT ───────────────────────────────────────────────────
-function openPortal(zone) {
-  window.open(zone.url, '_blank');
+function showPortal(zone) {
+  keys = {};
+  document.getElementById('portal-zone-name').textContent = zone.name;
+  document.getElementById('portal-open-btn').href = zone.url;
+  document.getElementById('portal-overlay').style.display = 'flex';
 }
 function closePortal() {
-  document.getElementById('portal-overlay').classList.remove('active');
+  document.getElementById('portal-overlay').style.display = 'none';
 }
-
-const hiddenLink = document.createElement('a');
-hiddenLink.target = '_blank';
-hiddenLink.rel = 'noopener';
-hiddenLink.style.display = 'none';
-document.body.appendChild(hiddenLink);
-
-document.addEventListener('keydown', e => {
-  if (document.getElementById('portal-overlay').classList.contains('active')) {
-    if (e.key === 'Escape') closePortal();
-    return;
-  }
-  keys[e.key] = true;
-  if ((e.key === 'e' || e.key === 'E') && currentZone) {
-    hiddenLink.href = currentZone.url;
-    hiddenLink.click();
-  }
-  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
-});
-document.addEventListener('keyup', e => { keys[e.key] = false; });
 document.getElementById('portal-overlay').addEventListener('click', function(e) {
   if (e.target === this) closePortal();
 });
+
+document.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (['e','E','у','У'].includes(e.key) && currentZone) {
+    showPortal(currentZone);
+  }
+  if (e.key === 'Escape') closePortal();
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ',
+       'w','W','a','A','s','S','d','D','e','E',
+       'ц','Ц','ф','Ф','ы','Ы','в','В','у','У'].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.key] = false; });
 
 // ─── DRAW HELPERS ────────────────────────────────────────────
 function px(x,y,w,h,color) {
@@ -870,10 +865,10 @@ function drawPlayer(p) {
 function update() {
   frameCount++;
   let dx=0, dy=0;
-  if(keys['ArrowLeft'] ||keys['a']||keys['A']){dx=-player.speed;player.dir='left';}
-  if(keys['ArrowRight']||keys['d']||keys['D']){dx= player.speed;player.dir='right';}
-  if(keys['ArrowUp']   ||keys['w']||keys['W']){dy=-player.speed;player.dir='up';}
-  if(keys['ArrowDown'] ||keys['s']||keys['S']){dy= player.speed;player.dir='down';}
+  if(keys['ArrowLeft'] ||keys['a']||keys['A']||keys['ф']||keys['Ф']){dx=-player.speed;player.dir='left';}
+  if(keys['ArrowRight']||keys['d']||keys['D']||keys['в']||keys['В']){dx= player.speed;player.dir='right';}
+  if(keys['ArrowUp']   ||keys['w']||keys['W']||keys['ц']||keys['Ц']){dy=-player.speed;player.dir='up';}
+  if(keys['ArrowDown'] ||keys['s']||keys['S']||keys['ы']||keys['Ы']){dy= player.speed;player.dir='down';}
   if(dx&&dy){dx*=0.707;dy*=0.707;}
   player.x=Math.max(12,Math.min(W-12,player.x+dx));
   player.y=Math.max(50,Math.min(H-12,player.y+dy));
