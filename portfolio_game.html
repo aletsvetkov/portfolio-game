@@ -205,6 +205,12 @@ function closePortal() {
   document.getElementById('portal-overlay').classList.remove('active');
 }
 
+const hiddenLink = document.createElement('a');
+hiddenLink.target = '_blank';
+hiddenLink.rel = 'noopener';
+hiddenLink.style.display = 'none';
+document.body.appendChild(hiddenLink);
+
 document.addEventListener('keydown', e => {
   if (document.getElementById('portal-overlay').classList.contains('active')) {
     if (e.key === 'Escape') closePortal();
@@ -212,7 +218,8 @@ document.addEventListener('keydown', e => {
   }
   keys[e.key] = true;
   if ((e.key === 'e' || e.key === 'E') && currentZone) {
-    window.open(currentZone.url, '_blank');
+    hiddenLink.href = currentZone.url;
+    hiddenLink.click();
   }
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
 });
@@ -899,6 +906,12 @@ function draw() {
   // Cursor cross
   // (hidden via CSS)
 }
+
+canvas.setAttribute('tabindex', '0');
+canvas.style.outline = 'none';
+canvas.addEventListener('mouseenter', () => canvas.focus());
+canvas.addEventListener('click', () => canvas.focus());
+canvas.focus();
 
 function loop(){update();draw();requestAnimationFrame(loop);}
 loop();
