@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alex Portfolio Game</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #1a1208;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Press Start 2P', monospace;
+}
+#wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+#title-bar {
+  background: #2c1f0e;
+  border: 3px solid #f5e642;
+  border-bottom: none;
+  padding: 8px 20px;
+  color: #f5e642;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-align: center;
+  width: 900px;
+}
+canvas {
+  display: block;
+  image-rendering: pixelated;
+  border: 3px solid #f5e642;
+  cursor: none;
+}
+#ui-bar {
+  background: #2c1f0e;
+  border: 3px solid #f5e642;
+  border-top: 2px solid #4a3010;
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 900px;
+}
+#zone-label { color: #f5e642; font-size: 8px; letter-spacing: 1px; }
+#controls-hint { color: #888; font-size: 6px; }
+#interact-hint { color: #00ff88; font-size: 7px; display: none; }
+#portal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+#portal-overlay.active { display: flex; }
+#portal-box {
+  background: #2c1f0e;
+  border: 4px solid #f5e642;
+  padding: 32px 40px;
+  text-align: center;
+  max-width: 480px;
+  width: 90%;
+  image-rendering: pixelated;
+}
+#portal-box h2 {
+  color: #f5e642;
+  font-size: 10px;
+  margin-bottom: 20px;
+  line-height: 1.8;
+  letter-spacing: 1px;
+}
+#portal-zone-name {
+  color: #fff;
+  font-size: 8px;
+  margin-bottom: 24px;
+  line-height: 1.8;
+}
+#portal-open-btn {
+  display: inline-block;
+  background: #f5e642;
+  color: #1a0a00;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  padding: 12px 24px;
+  text-decoration: none;
+  border: 3px solid #1a0a00;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+#portal-open-btn:hover { background: #ffe000; }
+#portal-close-btn {
+  display: block;
+  margin-top: 16px;
+  color: #888;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+#portal-close-btn:hover { color: #f5e642; }
+</style>
+</head>
+<body>
+<div id="wrapper">
+  <div id="title-bar">★ ALEX PORTFOLIO QUEST ★</div>
+  <canvas id="c" width="900" height="560"></canvas>
+  <div id="ui-bar">
+    <span id="zone-label">ОФИС ПОРТФОЛИО</span>
+    <span id="interact-hint">↑ НАЖМИ [E] ДЛЯ ОТКРЫТИЯ</span>
+    <span id="controls-hint">WASD / СТРЕЛКИ — движение &nbsp;|&nbsp; E — открыть</span>
+  </div>
+</div>
+
+<div id="portal-overlay">
+  <div id="portal-box">
+    <h2>★ ПОРТФОЛИО ★</h2>
+    <div id="portal-zone-name">ЗАГРУЗКА...</div>
+    <a id="portal-open-btn" href="#" target="_blank">▶ ОТКРЫТЬ РАЗДЕЛ</a>
+    <button id="portal-close-btn" onclick="closePortal()">[ ESC ] ЗАКРЫТЬ</button>
+  </div>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const W = 900, H = 560;
+const TILE = 32;
+const URL = 'https://alex-learn.ru/';
+
+// ─── COLOR PALETTE ───────────────────────────────────────────
+const C = {
+  // floors
+  floorA: '#e8dcc8', floorB: '#ddd0b4',
+  floorCarpet: '#c8bcd0', floorCarpetB: '#baaec4',
+  // walls
+  wall: '#c8aa80', wallDark: '#a08060', wallTop: '#6b4f2f',
+  wallLight: '#d4be98',
+  // desks
+  desk: '#a07850', deskTop: '#c8a478', deskDark: '#6b4828', deskEdge: '#8a6238',
+  // monitor
+  monBody: '#1a1a2e', monScreen0: '#002200', monGlow0: '#00ff88',
+  monScreen1: '#000820', monGlow1: '#4488ff',
+  monScreen2: '#200800', monGlow2: '#ffaa00',
+  monScreen3: '#001020', monGlow3: '#00ddff',
+  // chair
+  chairDark: '#2c3e50', chairMid: '#3d5a73', chairLight: '#5a7fa8',
+  // props
+  plantGreen: '#2d7a2d', plantLight: '#3da03d', plantDark: '#1a5a1a',
+  plantPot: '#c0603a', plantPotD: '#8a3820',
+  coffee: '#6b3a1a', coffeeTop: '#3a1a08', coffeeSteam: '#ddddff',
+  paper: '#f5f0e0', paperLine: '#ccbbaa',
+  book1: '#d44', book2: '#4a8', book3: '#48d', book4: '#d84',
+  trashCan: '#888', trashDark: '#555',
+  window: '#a8d8f0', windowFr: '#6b4f2f', windowSky: '#c8e8ff',
+  board: '#2c5f2e', boardFr: '#4a3018',
+  sticky1: '#ffe066', sticky2: '#ff9966', sticky3: '#99ddff',
+  lamp: '#e8d060', lampBase: '#888', lampShade: '#c8a838',
+  // UI
+  btnBg: '#f5e642', btnBd: '#2c1f0e', btnText: '#1a0a00',
+  // character
+  skin: '#f4b07a', skinD: '#d4844a',
+  beard: '#5c2d0a', beardD: '#3a1a04',
+  hair: '#3a1a04',
+  glass: '#2a3a5a', glassLens: 'rgba(150,180,220,0.5)',
+  shirt: '#ccc8bc', shirtCheck: '#aaa49a', shirtCheck2: '#999090',
+  tshirt: '#3a4060',
+  pants: '#2a2a3a', shoe: '#1a1010',
+};
+
+// ─── ZONES ───────────────────────────────────────────────────
+const zones = [
+  { id:0, x:0,   y:0,   w:440, h:268, name:'ГЕЙМИФИКАЦИЯ В ОБУЧЕНИИ', color:'#4a90d9', url: URL },
+  { id:1, x:460, y:0,   w:440, h:268, name:'ТРЕНИНГИ',                color:'#9a6abd', url: URL },
+  { id:2, x:0,   y:292, w:440, h:268, name:'ЭЛЕКТРОННЫЕ КУРСЫ',       color:'#2d9a4a', url: URL },
+  { id:3, x:460, y:292, w:440, h:268, name:'ТРЕНАЖЕРЫ И СИМУЛЯТОРЫ',  color:'#c07030', url: URL },
+];
+
+// ─── PLAYER ──────────────────────────────────────────────────
+let player = {
+  x: W/2, y: H/2,
+  speed: 2.2,
+  dir: 'down',
+};
+let keys = {};
+let frameCount = 0;
+let currentZone = null;
+
+// ─── INPUT ───────────────────────────────────────────────────
+function openPortal(zone) {
+  document.getElementById('portal-zone-name').textContent = zone.name;
+  document.getElementById('portal-open-btn').href = zone.url;
+  document.getElementById('portal-overlay').classList.add('active');
+  keys = {};
+}
+function closePortal() {
+  document.getElementById('portal-overlay').classList.remove('active');
+}
+
+document.addEventListener('keydown', e => {
+  if (document.getElementById('portal-overlay').classList.contains('active')) {
+    if (e.key === 'Escape') closePortal();
+    return;
+  }
+  keys[e.key] = true;
+  if ((e.key === 'e' || e.key === 'E') && currentZone) {
+    openPortal(currentZone);
+  }
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.key] = false; });
+document.getElementById('portal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closePortal();
+});
+
+// ─── DRAW HELPERS ────────────────────────────────────────────
+function px(x,y,w,h,color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(x), Math.round(y), w, h);
+}
+
+function drawFloor(x,y,w,h,isTraining) {
+  for (let ry=y; ry<y+h; ry+=TILE) {
+    for (let rx=x; rx<x+w; rx+=TILE) {
+      const even = ((rx/TILE)+(ry/TILE))%2===0;
+      if (isTraining) {
+        ctx.fillStyle = even ? C.floorCarpet : C.floorCarpetB;
+      } else {
+        ctx.fillStyle = even ? C.floorA : C.floorB;
+      }
+      ctx.fillRect(rx, ry, Math.min(TILE, x+w-rx), Math.min(TILE, y+h-ry));
+    }
+  }
+}
+
+function drawWallTop(x,y,w,h) {
+  px(x,y,w,h, C.wallLight);
+  px(x,y+h-4,w,4, C.wallDark);
+}
+
+function drawWindow(x,y) {
+  px(x,y,40,32, C.windowFr);
+  px(x+2,y+2,36,28, C.windowSky);
+  px(x+2,y+2,36,12, '#87ceeb');
+  px(x+18,y+2,2,28, C.windowFr);
+  px(x+2,y+16,36,2, C.windowFr);
+  // reflection
+  px(x+4,y+4,6,8, 'rgba(255,255,255,0.4)');
+  px(x+22,y+18,4,6, 'rgba(255,255,255,0.3)');
+}
+
+function drawDesk(x,y,w,h) {
+  // legs
+  px(x+2,y+h-8,6,8, C.deskDark);
+  px(x+w-8,y+h-8,6,8, C.deskDark);
+  // body
+  px(x,y+8,w,h-8, C.desk);
+  // top
+  px(x-2,y,w+4,10, C.deskTop);
+  // edge highlight
+  px(x,y+10,2,h-18, '#d4a880');
+  px(x+w-2,y+10,2,h-18, C.deskDark);
+}
+
+function drawMonitor(x,y,scrColor,glowColor,content) {
+  // stand pole
+  px(x+12,y+30,6,8, '#666');
+  px(x+6,y+37,18,4, '#555');
+  // body
+  px(x,y,36,28, C.monBody);
+  px(x+2,y+2,32,24, scrColor);
+  // scanlines
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  for(let i=0;i<12;i++) ctx.fillRect(x+2,y+2+i*2,32,1);
+  // content
+  if(content==='game') {
+    px(x+4,y+4,8,6, glowColor); px(x+14,y+4,6,4, glowColor+'99');
+    px(x+4,y+12,24,2, glowColor+'88');
+    px(x+4,y+16,4,4, glowColor); px(x+10,y+16,4,4, '#ff4444'); px(x+16,y+16,4,4,'#ffcc00');
+    ctx.fillStyle=glowColor; ctx.font='bold 6px monospace'; ctx.fillText('SCORE:1337',x+2,y+10);
+  } else if(content==='course') {
+    ctx.fillStyle=glowColor+'cc'; ctx.font='bold 5px monospace';
+    ctx.fillText('LESSON 3',x+3,y+8);
+    px(x+3,y+10,28,2,glowColor+'66');
+    for(let i=0;i<3;i++) px(x+3,y+14+i*5,22,3,glowColor+'55');
+    px(x+3,y+22,12,3,glowColor+'99');
+    // progress bar
+    px(x+3,y+18,28,3,'#333');px(x+3,y+18,18,3,glowColor);
+  } else if(content==='sim') {
+    // 3d wireframe feel
+    ctx.strokeStyle=glowColor; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x+8,y+8); ctx.lineTo(x+28,y+8);
+    ctx.lineTo(x+28,y+22); ctx.lineTo(x+8,y+22); ctx.closePath(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+12,y+4); ctx.lineTo(x+32,y+4);
+    ctx.lineTo(x+28,y+8); ctx.moveTo(x+12,y+4); ctx.lineTo(x+8,y+8); ctx.stroke();
+    px(x+16,y+10,6,6,glowColor+'66');
+  } else if(content==='vr') {
+    px(x+4,y+4,28,18, glowColor+'22');
+    ctx.fillStyle=glowColor; ctx.font='bold 5px monospace';
+    ctx.fillText('VR MODE',x+4,y+10);
+    ctx.fillText('ACTIVE',x+6,y+18);
+    px(x+4,y+20,20,2,glowColor);
+  }
+  // screen glow
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = 6;
+  px(x+2,y+2,32,24,'rgba(0,0,0,0)');
+  ctx.shadowBlur = 0;
+}
+
+function drawChair(x,y,color) {
+  // base star
+  ctx.fillStyle='#333';
+  for(let i=0;i<4;i++){
+    const angle=i*Math.PI/2;
+    ctx.fillRect(x+10+Math.cos(angle)*4,y+30+Math.sin(angle)*4,4,4);
+  }
+  px(x+10,y+24,4,8,'#444');
+  px(x+4,y+20,16,6, color);
+  px(x+2,y+4,20,18, color==='#5a7fa8'?C.chairLight:color);
+  px(x+4,y+2,16,4, C.chairDark);
+  // armrests
+  px(x,y+12,4,10,C.chairDark); px(x+20,y+12,4,10,C.chairDark);
+}
+
+function drawPlant(x,y,size=1) {
+  const s = size;
+  px(x+4*s,y+18*s,12*s,10*s,C.plantPotD);
+  px(x+2*s,y+16*s,16*s,8*s,C.plantPot);
+  px(x+4*s,y+6*s,12*s,12*s,C.plantDark);
+  px(x+2*s,y+2*s,8*s,10*s,C.plantGreen);
+  px(x+10*s,y+2*s,8*s,10*s,C.plantGreen);
+  px(x+6*s,y,8*s,6*s,C.plantLight);
+}
+
+function drawCoffee(x,y) {
+  // steam
+  ctx.fillStyle = C.coffeeSteam;
+  ctx.globalAlpha = 0.4 + 0.15*Math.sin(frameCount*0.08);
+  px(x+4,y-4,2,4,C.coffeeSteam); px(x+8,y-6,2,6,C.coffeeSteam);
+  ctx.globalAlpha = 1;
+  // cup
+  px(x+1,y+4,14,10,C.coffee); px(x,y+2,16,4,C.coffeeTop);
+  px(x+2,y+14,12,2,'#c88860');
+  px(x+14,y+6,4,4,C.coffeeTop); // handle
+  // saucer
+  px(x-2,y+14,20,3,'#ddddd0');
+}
+
+function drawPaper(x,y,rotated=false) {
+  if(rotated){ctx.save();ctx.translate(x+6,y+8);ctx.rotate(0.15);}
+  px(rotated?-6:x, rotated?-8:y, 16,20,C.paper);
+  for(let i=0;i<4;i++) px(rotated?-4:-(-x+x+2), rotated?-6+i*4:y+2+i*4, 12,2,C.paperLine);
+  if(rotated)ctx.restore();
+}
+
+function drawStickyNote(x,y,color) {
+  px(x,y,18,18,color);
+  px(x+2,y+4,14,2,'rgba(0,0,0,0.15)');
+  px(x+2,y+8,10,2,'rgba(0,0,0,0.15)');
+  px(x+2,y+12,12,2,'rgba(0,0,0,0.15)');
+}
+
+function drawTrash(x,y) {
+  px(x+2,y,16,2,C.trashDark);
+  px(x,y+2,20,20,C.trashCan);
+  px(x+2,y+4,16,2,'#aaa');
+  // crumpled paper
+  px(x+4,y-4,8,6,C.paper);
+  px(x+8,y-6,6,4,C.paper);
+}
+
+function drawBookStack(x,y) {
+  const books = [C.book1,C.book2,C.book3,C.book4];
+  let by = y;
+  books.forEach((b,i)=>{
+    px(x,by,18,6,b);
+    px(x,by,2,6,'rgba(0,0,0,0.3)');
+    px(x+16,by,2,6,'rgba(255,255,255,0.2)');
+    by-=6;
+  });
+}
+
+function drawLamp(x,y) {
+  // arm
+  px(x+6,y,2,16,C.lampBase);
+  px(x+4,y+14,10,2,C.lampBase);
+  // shade
+  px(x,y+16,20,10,C.lampShade);
+  px(x+2,y+18,16,6,C.lamp);
+  // glow
+  ctx.fillStyle='rgba(255,230,100,0.12)';
+  ctx.beginPath(); ctx.ellipse(x+10,y+28,25,10,0,0,Math.PI*2); ctx.fill();
+}
+
+function drawKeyboard(x,y) {
+  px(x,y,36,12,'#ccc');
+  for(let r=0;r<2;r++)
+    for(let c=0;c<8;c++)
+      px(x+2+c*4,y+2+r*4,3,3,'#aaa');
+  px(x+2,y+10,24,2,'#bbb'); // spacebar
+}
+
+function drawGamepad(x,y) {
+  px(x,y+4,28,12,'#222');
+  px(x+4,y,6,16,'#1a1a1a');
+  px(x+18,y,6,16,'#1a1a1a');
+  px(x+2,y+4,4,4,'#444'); px(x+4,y+2,4,4,'#444'); // dpad
+  px(x+4,y+4,4,4,'#555');
+  px(x+18,y+6,4,4,'#e00'); px(x+22,y+6,4,4,'#00a'); // buttons
+}
+
+function drawHeadphones(x,y) {
+  ctx.strokeStyle='#333'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.arc(x+12,y+12,10,Math.PI,0); ctx.stroke();
+  ctx.lineWidth=1;
+  px(x,y+8,8,10,'#222'); px(x+16,y+8,8,10,'#222');
+  px(x+2,y+10,4,6,'#555'); px(x+18,y+10,4,6,'#555');
+}
+
+function drawVRHeadset(x,y) {
+  px(x,y+4,36,16,'#1a1a2e');
+  px(x+4,y,28,8,'#2a2a4e');
+  px(x+2,y+6,14,10,'#87ceeb');
+  px(x+20,y+6,14,10,'#87ceeb');
+  px(x+4,y+8,10,6,'rgba(100,160,220,0.5)');
+  px(x+22,y+8,10,6,'rgba(100,160,220,0.5)');
+  // strap
+  px(x-4,y+8,6,6,'#444'); px(x+34,y+8,6,6,'#444');
+}
+
+function drawWhiteboard(x,y) {
+  px(x-4,y-4,84,56,C.boardFr);
+  px(x,y,76,48,C.board);
+  px(x,y,76,48,'#e8f0e8');
+  // drawing on board
+  ctx.strokeStyle='#2a5f2a'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(x+8,y+12); ctx.lineTo(x+40,y+12); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+8,y+8); ctx.lineTo(x+8,y+36); ctx.stroke();
+  // bar chart
+  ctx.fillStyle='#4a8f4a';
+  ctx.fillRect(x+12,y+20,8,16); ctx.fillRect(x+22,y+15,8,21);
+  ctx.fillRect(x+32,y+10,8,26); ctx.fillRect(x+42,y+18,8,18);
+  // marker tray
+  px(x+2,y+44,72,4,'#ddd');
+  px(x+4,y+45,6,2,'#e00'); px(x+12,y+45,6,2,'#00a');
+  px(x+20,y+45,6,2,'#0a0'); px(x+28,y+45,6,2,'#880');
+}
+
+function drawJoystick(x,y) {
+  px(x+4,y+10,12,12,'#444');
+  px(x+6,y+8,8,10,'#555');
+  px(x+8,y,4,12,'#333');
+  px(x+6,y-2,8,6,'#555');
+  px(x+2,y+18,16,4,'#333');
+  px(x,y+20,20,6,'#444');
+}
+
+// ─── ZONE DRAWERS ────────────────────────────────────────────
+
+function drawZone0(z) {
+  // GAMIFICATION zone — top left
+  const ox=z.x, oy=z.y;
+  drawFloor(ox,oy,z.w,z.h,false);
+  drawWallTop(ox,oy,z.w,40);
+  drawWindow(ox+60,oy+4);
+  drawWindow(ox+160,oy+4);
+
+  // Main gaming desk (L-shape feel)
+  drawDesk(ox+20,oy+60,220,30);
+  drawMonitor(ox+60,oy+28,C.monScreen0,C.monGlow0,'game');
+  drawMonitor(ox+110,oy+28,C.monScreen0,C.monGlow0*0,'#002200');
+  // second small monitor
+  ctx.save();
+  drawMonitor(ox+160,oy+32,'#001500','#00cc66','game');
+  ctx.restore();
+  drawKeyboard(ox+70,oy+64);
+  drawGamepad(ox+130,oy+64);
+  drawCoffee(ox+200,oy+62);
+  drawStickyNote(ox+36,oy+62,C.sticky1);
+  drawStickyNote(ox+56,oy+60,C.sticky2);
+  drawPaper(ox+220,oy+62);
+  drawChair(ox+90,oy+92,C.chairLight);
+
+  // Side desk
+  drawDesk(ox+260,oy+80,120,28);
+  drawMonitor(ox+270,oy+48,C.monScreen0,C.monGlow0,'game');
+  drawGamepad(ox+310,oy+82);
+  drawBookStack(ox+370,oy+80);
+
+  // Decor
+  drawPlant(ox+380,oy+150);
+  drawPlant(ox+8,oy+180);
+  drawTrash(ox+30,oy+185);
+  drawLamp(ox+240,oy+58);
+  drawStickyNote(ox+340,oy+82,C.sticky3);
+  drawCoffee(ox+350,oy+80);
+
+  // Rug
+  ctx.fillStyle='rgba(74,144,217,0.12)';
+  ctx.fillRect(ox+15,oy+55,230,130);
+  ctx.strokeStyle='rgba(74,144,217,0.3)';
+  ctx.lineWidth=2;
+  ctx.strokeRect(ox+20,oy+60,220,120);
+
+  // Poster on wall
+  px(ox+280,oy+6,60,32,'#1a1a2e');
+  ctx.fillStyle='#00ff88'; ctx.font='bold 5px monospace';
+  ctx.fillText('GAME',ox+292,oy+16); ctx.fillText('ON!',ox+296,oy+26);
+
+  drawZoneLabel(z, ox+z.w/2, oy+z.h-16);
+  if(currentZone?.id===z.id) drawInteractButton(z,ox+z.w/2,oy+z.h-32);
+}
+
+function drawZone1(z) {
+  // TRAINING zone — top right
+  const ox=z.x, oy=z.y;
+  drawFloor(ox,oy,z.w,z.h,true);
+  drawWallTop(ox,oy,z.w,40);
+  drawWindow(ox+100,oy+4);
+  drawWindow(ox+220,oy+4);
+
+  // Whiteboard
+  drawWhiteboard(ox+280,oy+8);
+
+  // Presenter desk
+  drawDesk(ox+260,oy+70,140,24);
+  drawCoffee(ox+360,oy+68);
+  drawPaper(ox+280,oy+70); drawPaper(ox+298,oy+70,true);
+  drawLamp(ox+320,oy+48);
+
+  // Participant chairs — 2 rows of 3
+  const chairPositions = [
+    [30,80],[100,80],[170,80],
+    [30,150],[100,150],[170,150],
+  ];
+  chairPositions.forEach(([cx,cy],i)=>{
+    drawChair(ox+cx,oy+cy,'#7a5c8a');
+    // notebook on each chair
+    px(ox+cx+4,oy+cy-2,16,20,'#fff');
+    px(ox+cx+6,oy+cy,12,2,'#aaa');
+    px(ox+cx+6,oy+cy+4,12,2,'#aaa');
+    px(ox+cx+6,oy+cy+8,12,2,'#aaa');
+  });
+
+  // Name plates
+  for(let i=0;i<3;i++){
+    px(ox+30+i*70,oy+78,22,4,'#e8e8e8');
+    px(ox+32+i*70,oy+79,18,2,'#aaa');
+  }
+
+  // Decor
+  drawPlant(ox+8,oy+50);
+  drawPlant(ox+400,oy+170);
+  drawBookStack(ox+8,oy+170);
+  drawTrash(ox+240,oy+195);
+
+  drawZoneLabel(z, ox+z.w/2, oy+z.h-16);
+  if(currentZone?.id===z.id) drawInteractButton(z,ox+z.w/2,oy+z.h-32);
+}
+
+function drawZone2(z) {
+  // E-LEARNING zone — bottom left
+  const ox=z.x, oy=z.y;
+  drawFloor(ox,oy,z.w,z.h,false);
+  drawWallTop(ox,oy,z.w,40);
+  drawWindow(ox+80,oy+4);
+
+  // Main desk
+  drawDesk(ox+20,oy+60,230,30);
+  drawMonitor(ox+60,oy+28,C.monScreen1,C.monGlow1,'course');
+  drawMonitor(ox+110,oy+28,'#000820','#3377ee','course');
+  drawHeadphones(ox+180,oy+64);
+  drawKeyboard(ox+70,oy+64);
+  drawCoffee(ox+210,oy+62);
+  drawStickyNote(ox+36,oy+62,C.sticky3);
+  drawStickyNote(ox+36,oy+46,C.sticky1);
+  drawBookStack(ox+226,oy+60);
+  drawChair(ox+100,oy+92,'#2d9a4a');
+
+  // Second desk
+  drawDesk(ox+270,oy+80,130,28);
+  drawMonitor(ox+280,oy+48,C.monScreen1,C.monGlow1,'course');
+  drawPaper(ox+310,oy+82); drawPaper(ox+330,oy+82,true);
+  drawLamp(ox+390,oy+58);
+
+  // Bookshelf (simplified)
+  px(ox+10,oy+130,24,100,'#c8a478'); // shelf board
+  for(let i=0;i<5;i++) drawBookStack(ox+10,oy+200-i*20);
+
+  drawPlant(ox+380,oy+160);
+  drawTrash(ox+248,oy+195);
+  drawStickyNote(ox+300,oy+82,C.sticky2);
+
+  // Certificate on wall
+  px(ox+290,oy+6,80,34,'#fffff0');
+  px(ox+292,oy+8,76,30,'#f0e0a0');
+  ctx.fillStyle='#884400'; ctx.font='bold 4px monospace';
+  ctx.fillText('CERTIFICATE',ox+296,oy+18);
+  ctx.fillText('of excellence',ox+296,oy+26);
+  px(ox+310,oy+28,40,2,'#884400');
+
+  drawZoneLabel(z, ox+z.w/2, oy+z.h-16);
+  if(currentZone?.id===z.id) drawInteractButton(z,ox+z.w/2,oy+z.h-32);
+}
+
+function drawZone3(z) {
+  // SIMULATORS zone — bottom right
+  const ox=z.x, oy=z.y;
+  drawFloor(ox,oy,z.w,z.h,false);
+  drawWallTop(ox,oy,z.w,40);
+  drawWindow(ox+120,oy+4);
+  drawWindow(ox+260,oy+4);
+
+  // Main desk
+  drawDesk(ox+10,oy+60,230,30);
+  drawMonitor(ox+40,oy+28,C.monScreen2,C.monGlow2,'sim');
+  drawMonitor(ox+90,oy+28,'#200800','#ee8800','vr');
+  drawVRHeadset(ox+160,oy+64);
+  drawJoystick(ox+200,oy+62);
+  drawKeyboard(ox+60,oy+64);
+  drawChair(ox+90,oy+92,'#c07030');
+
+  // Second desk with more simulators
+  drawDesk(ox+270,oy+70,130,28);
+  drawMonitor(ox+280,oy+38,C.monScreen3,C.monGlow3,'sim');
+  drawJoystick(ox+330,oy+72);
+  drawHeadphones(ox+360,oy+72);
+  drawLamp(ox+380,oy+48);
+
+  // Control panel (horizontal)
+  px(ox+10,oy+160,180,24,'#2a2a3a');
+  px(ox+10,oy+158,180,4,'#3a3a4a');
+  // buttons on panel
+  const btnColors=['#e00','#0a0','#ff0','#00a','#e80'];
+  for(let i=0;i<5;i++){
+    px(ox+20+i*30,oy+164,16,10,btnColors[i]);
+    px(ox+22+i*30,oy+166,12,4,'rgba(255,255,255,0.2)');
+  }
+  // dials
+  ctx.strokeStyle='#888'; ctx.lineWidth=2;
+  for(let i=0;i<3;i++){
+    ctx.beginPath(); ctx.arc(ox+170+i*24,oy+168,8,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox+170+i*24,oy+168);
+    ctx.lineTo(ox+170+i*24+6*Math.cos(-0.5+i*0.4),oy+168+6*Math.sin(-0.5+i*0.4)); ctx.stroke();
+  }
+
+  drawPlant(ox+400,oy+155);
+  drawPlant(ox+8,oy+190);
+  drawTrash(ox+248,oy+200);
+  drawStickyNote(ox+15,oy+62,C.sticky2);
+  drawCoffee(ox+230,oy+62);
+  drawPaper(ox+220,oy+64,true);
+
+  // Poster
+  px(ox+310,oy+6,100,34,'#000820');
+  ctx.fillStyle='#00ddff'; ctx.font='bold 5px monospace';
+  ctx.fillText('SIMULATION',ox+314,oy+16); ctx.fillText('LAB v2.0',ox+318,oy+26);
+
+  drawZoneLabel(z, ox+z.w/2, oy+z.h-16);
+  if(currentZone?.id===z.id) drawInteractButton(z,ox+z.w/2,oy+z.h-32);
+}
+
+// ─── DIVIDERS ────────────────────────────────────────────────
+function drawDividers() {
+  // vertical center divider
+  ctx.fillStyle='#6b4f2f';
+  ctx.fillRect(440,0,20,H);
+  ctx.fillStyle='#8b6f47';
+  ctx.fillRect(444,0,12,H);
+  ctx.fillStyle='#a08060';
+  ctx.fillRect(446,0,4,H);
+  // horizontal
+  ctx.fillStyle='#6b4f2f';
+  ctx.fillRect(0,268,W,24);
+  ctx.fillStyle='#8b6f47';
+  ctx.fillRect(0,272,W,16);
+  ctx.fillStyle='#a08060';
+  ctx.fillRect(0,276,W,6);
+
+  // Zone corner markers
+  ctx.fillStyle='#4a3018';
+  ctx.fillRect(432,260,36,28);
+  ctx.fillStyle='#6b4f2f';
+  ctx.fillRect(436,264,28,20);
+  // small plant in center
+  drawPlant(444,255,0.8);
+}
+
+// ─── ZONE LABEL & BUTTON ─────────────────────────────────────
+function drawZoneLabel(z, cx, cy) {
+  ctx.font = '700 7px "Press Start 2P", monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillText(z.name, cx+1, cy+1);
+  ctx.fillStyle = z.color;
+  ctx.fillText(z.name, cx, cy);
+}
+
+function drawInteractButton(z, cx, cy) {
+  const bw=170, bh=20;
+  const bx=cx-bw/2, by=cy-bh/2;
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,0.4)';
+  ctx.fillRect(bx+3,by+3,bw,bh);
+  // glow border
+  ctx.fillStyle=z.color;
+  ctx.fillRect(bx-1,by-1,bw+2,bh+2);
+  // bg
+  ctx.fillStyle=C.btnBg;
+  ctx.fillRect(bx,by,bw,bh);
+  // text
+  ctx.fillStyle=C.btnText;
+  ctx.font='700 6px "Press Start 2P", monospace';
+  ctx.textAlign='center';
+  ctx.fillText('[E] ОТКРЫТЬ ПОРТФОЛИО', cx, by+13);
+}
+
+// ─── PLAYER (Alex: bald, beard, glasses, plaid shirt) ────────
+function drawPlayer(p) {
+  const x = Math.round(p.x);
+  const y = Math.round(p.y);
+  const moving = keys['ArrowUp']||keys['ArrowDown']||keys['ArrowLeft']||keys['ArrowRight']||keys['w']||keys['s']||keys['a']||keys['d'];
+  const bob = moving ? (frameCount%16<8?-1:0) : 0;
+  const by = bob;
+
+  // Shadow
+  ctx.fillStyle='rgba(0,0,0,0.2)';
+  ctx.beginPath(); ctx.ellipse(x,y+2,11,4,0,0,Math.PI*2); ctx.fill();
+
+  const lx = x-10; // left edge of sprite
+
+  // LEGS
+  const leftFoot  = moving&&frameCount%20<10;
+  px(lx+3,  y-10+by+(leftFoot?1:0),  7, 10, C.pants);
+  px(lx+10, y-10+by+(leftFoot?0:1),  7, 10, C.pants);
+  // Shoes
+  px(lx+2,  y-1+by+(leftFoot?1:0),   8,  4, C.shoe);
+  px(lx+10, y-1+by+(leftFoot?0:1),   8,  4, C.shoe);
+
+  // BODY — plaid shirt base
+  px(lx+1, y-26+by, 18, 16, C.shirt);
+  // plaid pattern
+  ctx.fillStyle=C.shirtCheck;
+  for(let row=0;row<4;row++) px(lx+1, y-26+by+row*4, 18, 2, 'rgba(0,0,0,0.08)');
+  for(let col=0;col<5;col++) px(lx+1+col*4, y-26+by, 2, 16, 'rgba(0,0,0,0.06)');
+  // dark t-shirt visible at collar
+  px(lx+6, y-26+by, 8, 6, C.tshirt);
+  // shirt collar/lapels
+  px(lx+5, y-26+by, 3, 8, C.shirt);
+  px(lx+12, y-26+by, 3, 8, C.shirt);
+
+  // ARMS
+  if(p.dir==='left') {
+    px(lx-3, y-24+by, 5, 12, C.shirt);
+    px(lx+18, y-24+by, 5, 12, C.shirt);
+    px(lx-3, y-13+by, 5, 5, C.skin); // hands
+    px(lx+18, y-13+by, 5, 5, C.skin);
+  } else if(p.dir==='right') {
+    px(lx+18, y-24+by, 5, 12, C.shirt);
+    px(lx-3, y-24+by, 5, 12, C.shirt);
+    px(lx+18, y-13+by, 5, 5, C.skin);
+    px(lx-3, y-13+by, 5, 5, C.skin);
+  } else {
+    px(lx-2, y-24+by, 5, 12, C.shirt);
+    px(lx+17, y-24+by, 5, 12, C.shirt);
+    px(lx-2, y-13+by, 5, 5, C.skin);
+    px(lx+17, y-13+by, 5, 5, C.skin);
+  }
+
+  // NECK
+  px(lx+7, y-30+by, 6, 6, C.skin);
+
+  // HEAD — bald
+  px(lx+3, y-42+by, 14, 14, C.skin);
+  // bald shine
+  px(lx+5, y-42+by, 6, 4, 'rgba(255,255,255,0.25)');
+  // ear
+  px(lx+1, y-38+by, 3, 5, C.skin);
+  px(lx+16, y-38+by, 3, 5, C.skin);
+  // small stubble on sides/back of head
+  px(lx+3, y-34+by, 3, 3, C.beard);
+  px(lx+14, y-34+by, 3, 3, C.beard);
+
+  // BEARD (big, prominent)
+  px(lx+3,  y-32+by, 14, 4,  C.beard);
+  px(lx+2,  y-28+by, 16, 6,  C.beard);
+  px(lx+3,  y-22+by, 14, 2,  C.beardD); // chin shadow
+  // beard highlight
+  px(lx+6,  y-30+by, 4, 2, 'rgba(150,80,20,0.5)');
+
+  // MUSTACHE
+  px(lx+5, y-34+by, 10, 3, C.beard);
+
+  // GLASSES
+  if(p.dir !== 'up') {
+    // frame
+    ctx.fillStyle=C.glass;
+    // left lens frame
+    ctx.fillRect(lx+4, y-40+by, 6, 5);
+    ctx.fillRect(lx+11, y-40+by, 6, 5);
+    ctx.fillRect(lx+10, y-38+by, 2, 2); // bridge
+    ctx.fillRect(lx+3, y-38+by, 2, 2); // left arm
+    ctx.fillRect(lx+17, y-38+by, 2, 2); // right arm
+    // lenses
+    ctx.fillStyle = C.glassLens;
+    ctx.fillRect(lx+5, y-39+by, 4, 3);
+    ctx.fillRect(lx+12, y-39+by, 4, 3);
+    // reflection
+    ctx.fillStyle='rgba(255,255,255,0.45)';
+    ctx.fillRect(lx+5, y-39+by, 2, 1);
+    ctx.fillRect(lx+12, y-39+by, 2, 1);
+  }
+
+  // EYES (behind glasses, when not going up)
+  if(p.dir !== 'up') {
+    ctx.fillStyle='#1a1a2e';
+    const ex = p.dir==='left'?-1:p.dir==='right'?1:0;
+    ctx.fillRect(lx+5+ex, y-38+by, 3, 2);
+    ctx.fillRect(lx+12+ex, y-38+by, 3, 2);
+  } else {
+    // from behind — just ears and bald head
+  }
+}
+
+// ─── PHYSICS / ZONES ─────────────────────────────────────────
+function update() {
+  frameCount++;
+  let dx=0, dy=0;
+  if(keys['ArrowLeft'] ||keys['a']||keys['A']){dx=-player.speed;player.dir='left';}
+  if(keys['ArrowRight']||keys['d']||keys['D']){dx= player.speed;player.dir='right';}
+  if(keys['ArrowUp']   ||keys['w']||keys['W']){dy=-player.speed;player.dir='up';}
+  if(keys['ArrowDown'] ||keys['s']||keys['S']){dy= player.speed;player.dir='down';}
+  if(dx&&dy){dx*=0.707;dy*=0.707;}
+  player.x=Math.max(12,Math.min(W-12,player.x+dx));
+  player.y=Math.max(50,Math.min(H-12,player.y+dy));
+
+  // avoid center dividers slightly
+  if(player.x>436&&player.x<464) player.x+=dx>0?3:-3;
+  if(player.y>264&&player.y<296) player.y+=dy>0?3:-3;
+
+  currentZone=null;
+  for(const z of zones){
+    if(player.x>z.x+16&&player.x<z.x+z.w-16&&player.y>z.y+44&&player.y<z.y+z.h-4){
+      currentZone=z; break;
+    }
+  }
+  document.getElementById('zone-label').textContent=currentZone?currentZone.name:'ОФИС ПОРТФОЛИО';
+  document.getElementById('interact-hint').style.display=currentZone?'block':'none';
+}
+
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  ctx.textAlign='left';
+  drawZone0(zones[0]);
+  drawZone1(zones[1]);
+  drawZone2(zones[2]);
+  drawZone3(zones[3]);
+  drawDividers();
+  drawPlayer(player);
+
+  // Cursor cross
+  // (hidden via CSS)
+}
+
+function loop(){update();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>
