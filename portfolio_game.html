@@ -199,10 +199,7 @@ let currentZone = null;
 
 // ─── INPUT ───────────────────────────────────────────────────
 function openPortal(zone) {
-  document.getElementById('portal-zone-name').textContent = zone.name;
-  document.getElementById('portal-open-btn').href = zone.url;
-  document.getElementById('portal-overlay').classList.add('active');
-  keys = {};
+  window.open(zone.url, '_blank');
 }
 function closePortal() {
   document.getElementById('portal-overlay').classList.remove('active');
@@ -215,7 +212,7 @@ document.addEventListener('keydown', e => {
   }
   keys[e.key] = true;
   if ((e.key === 'e' || e.key === 'E') && currentZone) {
-    openPortal(currentZone);
+    window.open(currentZone.url, '_blank');
   }
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
 });
@@ -708,9 +705,12 @@ function drawZoneLabel(z, cx, cy) {
   ctx.fillText(z.name, cx, cy);
 }
 
+let activeButtonHitbox = null;
+
 function drawInteractButton(z, cx, cy) {
-  const bw=170, bh=20;
-  const bx=cx-bw/2, by=cy-bh/2;
+  const bw=170, bh=24;
+  const bx=Math.round(cx-bw/2), by=Math.round(cy-bh/2);
+  activeButtonHitbox = { x:bx, y:by, w:bw, h:bh, url:z.url, name:z.name };
   // shadow
   ctx.fillStyle='rgba(0,0,0,0.4)';
   ctx.fillRect(bx+3,by+3,bw,bh);
@@ -724,8 +724,33 @@ function drawInteractButton(z, cx, cy) {
   ctx.fillStyle=C.btnText;
   ctx.font='700 6px "Press Start 2P", monospace';
   ctx.textAlign='center';
-  ctx.fillText('[E] ОТКРЫТЬ ПОРТФОЛИО', cx, by+13);
+  ctx.fillText('[ E / CLICK ] ПОРТФОЛИО', cx, by+15);
 }
+
+canvas.addEventListener('click', function(e) {
+  if (!activeButtonHitbox) return;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width;
+  const scaleY = H / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+  const b = activeButtonHitbox;
+  if (mx >= b.x && mx <= b.x+b.w && my >= b.y && my <= b.y+b.h) {
+    window.open(b.url, '_blank');
+  }
+});
+
+canvas.style.cursor = 'default';
+canvas.addEventListener('mousemove', function(e) {
+  if (!activeButtonHitbox) { canvas.style.cursor='default'; return; }
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width;
+  const scaleY = H / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+  const b = activeButtonHitbox;
+  canvas.style.cursor = (mx>=b.x&&mx<=b.x+b.w&&my>=b.y&&my<=b.y+b.h) ? 'pointer' : 'default';
+});
 
 // ─── PLAYER (Alex: bald, beard, glasses, plaid shirt) ────────
 function drawPlayer(p) {
@@ -863,6 +888,7 @@ function update() {
 function draw() {
   ctx.clearRect(0,0,W,H);
   ctx.textAlign='left';
+  activeButtonHitbox = null;
   drawZone0(zones[0]);
   drawZone1(zones[1]);
   drawZone2(zones[2]);
